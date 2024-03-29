@@ -1,12 +1,16 @@
 import itertools
+import math
 import typing
 from bisect import bisect
 from dataclasses import dataclass, field
 from operator import itemgetter
 
+from eqint import errors
+
 # tuples of bounds provided as problem parameters
 Bound = tuple[int | None, int | None]
 Bounds = typing.Sequence[Bound]
+
 # solution table mapping budget to (x, rate) pairs
 SolutionKeys = tuple[int, ...]
 SolutionValues = tuple[tuple[int, int], ...]
@@ -19,27 +23,41 @@ class EquitableBudgetAllocator:
 
     # problem parameters
     bounds: Bounds
+    # constants inferred from bounds
+    n_lower_unbounded: int = field(init=False, repr=False, compare=False)
+    n_upper_unbounded: int = field(init=False, repr=False, compare=False)
+    lower_bound: int | None = field(init=False, repr=False, compare=False)
+    upper_bound: int | None = field(init=False, repr=False, compare=False)
     # solution table
     _table: SolutionTable = field(init=False, repr=False, compare=False)
 
     def __post_init__(self):
+        # solution table
         object.__setattr__(self, "_table", _solve_table(self.bounds))
 
-    @property
-    def lower_bound(self) -> int | None:
-        """Lower bound of solution space."""
-        lower_bounds = tuple(b[0] for b in self.bounds if b[0] is not None)
-        return sum(lower_bounds) if lower_bounds else None
+        # number of allocations without lower / upper bounds
+        n_lower_unbounded = sum(b[0] is None for b in self.bounds)
+        n_upper_unbounded = sum(b[1] is None for b in self.bounds)
+        object.__setattr__(self, "n_lower_unbounded", n_lower_unbounded)
+        object.__setattr__(self, "n_upper_unbounded", n_upper_unbounded)
+
+        # lower / upper bounds for the budget solution space
+        lower_bound = None if n_lower_unbounded else sum(b[0] for b in self.bounds)  # type: ignore
+        upper_bound = None if n_upper_unbounded else sum(b[1] for b in self.bounds)  # type: ignore
+        object.__setattr__(self, "lower_bound", lower_bound)
+        object.__setattr__(self, "upper_bound", upper_bound)
 
     @property
-    def upper_bound(self) -> int | None:
-        """Upper bound of solution space."""
-        upper_bounds = tuple(b[1] for b in self.bounds if b[1] is not None)
-        return sum(upper_bounds) if upper_bounds else None
+    def no_constraints(self):
+        """Flag denoting if the problem has no constraints (i.e. an unbounded linear function)."""
+        # the table has no entries iff all bounds are None
+        return len(self._table[0]) == 0
 
     def _solve_x(self, budget: int):
         """Compute the (non-integer) solution to x."""
-        # TODO: verify budget is in feasible region
+        # if there are no constraints on any allocations, the solution is just the average
+        if self.no_constraints:
+            return budget / len(self.bounds)
 
         # get ref to solution table
         keys, values = self._table
@@ -47,10 +65,25 @@ class EquitableBudgetAllocator:
         # find region with binary search
         budget_key = bisect(keys, budget) - 1
 
-        # min_budget + dx * rate = budget <=> dx = (budget - min_budget) / rate
-        x, rate = values[budget_key]
-        min_budget = keys[budget_key]
-        dx = (budget - min_budget) / rate
+        # handle exterior of defined solution table
+        if budget_key < 0:
+            if self.lower_bound:
+                raise errors.InsufficientBudgetError("Budget outside solution space: cannot satisfy lower bounds.")
+            # if no lower bound, we can extrapolate "backwards" from x at the rate of the number of
+            # lower-unbounded allocations
+            x, rate = values[0][0], self.n_lower_unbounded
+            budget_start = keys[0]
+        elif self.upper_bound and budget > self.upper_bound:
+            raise errors.ExcessBudgetError("Budget outside solution space: cannot satisfy upper bounds.")
+            # if not exceeding an upper bound, we can proceed from the upper (defined) boundary of
+            # the solution table and extrapolate forward
+        else:
+            x, rate = values[budget_key]
+            budget_start = keys[budget_key]
+
+        # budget_start + dx * rate = budget <=> dx = (budget - budget_start) / rate
+        # NOTE: min_budget == budget <=> exactly at right boundary of region, so dx is 0
+        dx = 0 if budget == budget_start else (budget - budget_start) / rate
 
         return x + dx
 
@@ -91,10 +124,11 @@ def _solve_table(bounds: Bounds) -> SolutionTable:
 
     # initialize vars
     min_region = 0  # constraints are accumulated in loop
-    rate = sum(b[0] is None for b in bounds)  # initial rate is 1 per non-lower-bounded element
+    n_lower_unbounded = sum(b[0] is None for b in bounds)
+    rate = n_lower_unbounded  # initial rate is 1 per non-lower-bounded element
 
     # construct intermediary table mapping values of x to rates of budget allocation
-    x_table: dict[int, int] = {0: rate}
+    x_table: dict[int, int] = {}
     for b, is_upper in flat_bounds:
         if is_upper:
             # if upper bound: rate decreases
@@ -110,7 +144,8 @@ def _solve_table(bounds: Bounds) -> SolutionTable:
     keys: list[int] = []
     values: list[tuple[int, int]] = []
     region_start = min_region
-    prev_x, prev_rate = 0, 0
+    # rate accounts for the contribution from unbounded allocations before the first x
+    prev_x, prev_rate = 0, n_lower_unbounded
 
     for x, rate in x_table.items():
         # accumulate the mapping from regions of budgets to values of x
@@ -125,7 +160,7 @@ def _solve_table(bounds: Bounds) -> SolutionTable:
 def _distribute_integers(allocations: tuple[float, ...]) -> tuple[int, ...]:
     """Optimally distribute integers from the continuous solution to the allocation problem."""
     # since the bounds are integer, the floored value will not break the constraints
-    floored_allocations = [int(a) for a in allocations]
+    floored_allocations = [math.floor(a) for a in allocations]
 
     # NOTE: any binding upper bounds in the original problem will have a difference of 0 to the
     # floored version; since we sort by the difference, these values will not appear before all
