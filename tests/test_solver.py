@@ -237,6 +237,18 @@ def test_constraints_met():
     assert not constraints_met(b, (30, -82, 1, 8))
 
 
+def test_trivial_constraints():
+    # trivial constraints (reducing to constants) behaves as expected
+    solver = EquitableBudgetAllocator(((-1, -1), (3, 3), (5, 5), (7, 7)))
+    assert solver.solve(-1 + 3 + 5 + 7) == (-1, 3, 5, 7)
+
+    with pytest.raises(errors.InsufficientBudgetError):
+        solver.solve(-1 + 3 + 5 + 6)
+
+    with pytest.raises(errors.ExcessBudgetError):
+        solver.solve(3 + 5 + 7)
+
+
 # actual solver tests
 def test_solution_bounds():
     # both bounds
