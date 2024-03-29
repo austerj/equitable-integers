@@ -249,6 +249,18 @@ def test_trivial_constraints():
         solver.solve(3 + 5 + 7)
 
 
+def test_constraint_validation():
+    # invalid constraints (lower bound > upper bound) raises error
+    with pytest.raises(errors.ConstraintError):
+        EquitableBudgetAllocator(((0, -4), (2, 3), (None, 5)))
+
+    with pytest.raises(errors.ConstraintError):
+        EquitableBudgetAllocator(((-4, 0), (3, 2), (None, 5)))
+
+    # fixing order of constraints stops error
+    EquitableBudgetAllocator(((-4, 0), (2, 3), (None, 5)))
+
+
 # actual solver tests
 def test_solution_bounds():
     # both bounds

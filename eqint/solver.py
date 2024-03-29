@@ -32,6 +32,10 @@ class EquitableBudgetAllocator:
     _table: SolutionTable = field(init=False, repr=False, compare=False)
 
     def __post_init__(self):
+        # validate constraints
+        if any(b[0] is not None and b[1] is not None and b[0] > b[1] for b in self.bounds):
+            raise errors.ConstraintError("Invalid constraint")
+
         # solution table
         object.__setattr__(self, "_table", _solve_table(self.bounds))
 

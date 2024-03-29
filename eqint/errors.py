@@ -18,3 +18,7 @@ class InsufficientBudgetError(BudgetError):
 
 class ExcessBudgetError(BudgetError):
     """Error from excess budget."""
+
+
+class ConstraintError(BudgetError):
+    """Error from invalid constraints."""
