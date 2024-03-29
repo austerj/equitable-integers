@@ -28,6 +28,130 @@ bounds = (
         (None, 35),
         (11, 29),
     ),
+    # bounds 2
+    (
+        (-40, 23),
+        (None, 90),
+        (13, 55),
+        (-8, 1),
+        (0, 30),
+        (0, 10),
+        (55, None),
+        (1, 2),
+    ),
+    # bounds 3
+    (
+        (-40, None),
+        (-20, None),
+        (-13, None),
+        (-1, 2),
+    ),
+    # bounds 4
+    (
+        (None, None),
+        (None, None),
+        (None, None),
+        (-1, None),
+    ),
+    # bounds 5
+    (
+        (-51, 85),
+        (2, 900),
+        (-1, 1),
+        (0, 1),
+    ),
+    # bounds 6
+    (
+        (-51, 85),
+        (2, 900),
+        (-1, 1),
+        (0, 1),
+    ),
+    # bounds 7
+    (
+        (64, 115),
+        (63, 149),
+        (16, None),
+        (-100, -26),
+        (-80, None),
+        (None, 180),
+        (None, -19),
+        (None, 109),
+        (-92, 214),
+        (-39, 134),
+        (143, None),
+        (-67, None),
+        (217, None),
+        (-9, 188),
+        (-64, 102),
+        (131, None),
+        (-66, 75),
+        (153, 168),
+        (83, None),
+        (None, 188),
+        (92, 197),
+        (None, -33),
+        (164, None),
+        (None, -83),
+        (70, 82),
+        (11, 103),
+    ),
+    # bounds 8
+    (
+        (49, 185),
+        (None, None),
+        (None, -51),
+        (105, 202),
+        (-46, 70),
+        (None, 142),
+        (173, None),
+        (None, None),
+        (None, 142),
+        (231, None),
+        (None, None),
+        (None, None),
+        (170, None),
+        (None, 132),
+        (224, 239),
+        (77, 149),
+        (-63, None),
+        (None, 87),
+        (106, None),
+        (-7, None),
+        (6, 125),
+        (None, 38),
+        (None, None),
+        (None, 126),
+        (85, 199),
+        (None, 167),
+        (None, None),
+        (124, None),
+        (24, 239),
+        (None, -87),
+        (None, 222),
+        (None, -28),
+        (41, None),
+        (None, -84),
+        (57, 128),
+        (-26, 200),
+        (None, 65),
+    ),
+    # bounds 9
+    (
+        (None, None),
+        (None, None),
+        (None, None),
+        (None, None),
+    ),
+    # bounds 10
+    (
+        (None, 2),
+        (None, 7),
+        (-39, None),
+        (None, None),
+        (None, None),
+        (0, 1),
+    ),
 )
 
 
@@ -179,3 +303,20 @@ def test_simple():
 
     # evaluation at lower bound works
     solve(((5, 50), (-10, 10)), -5)
+
+
+def test_solutions():
+    # test solutions for variety of bounds and budgets
+    for bnd in bounds:
+        solver = EquitableBudgetAllocator(bnd)
+        low = min([*[b[0] for b in solver.bounds if b[0] is not None], -400])
+        high = max([*[b[1] for b in solver.bounds if b[1] is not None], 400])
+        for budget in range(low - 20, high + 20, int((high - low) / 10)):
+            if (lb := solver.lower_bound) and budget < lb:
+                with pytest.raises(errors.InsufficientBudgetError):
+                    solver.solve(budget)
+            elif (ub := solver.upper_bound) and budget > ub:
+                with pytest.raises(errors.ExcessBudgetError):
+                    solver.solve(budget)
+            else:
+                assert solution_correct(bnd, budget)
