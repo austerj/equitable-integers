@@ -25,6 +25,18 @@ class EquitableBudgetAllocator:
     def __post_init__(self):
         object.__setattr__(self, "_table", _solve_table(self.bounds))
 
+    @property
+    def lower_bound(self) -> int | None:
+        """Lower bound of solution space."""
+        lower_bounds = tuple(b[0] for b in self.bounds if b[0] is not None)
+        return sum(lower_bounds) if lower_bounds else None
+
+    @property
+    def upper_bound(self) -> int | None:
+        """Upper bound of solution space."""
+        upper_bounds = tuple(b[1] for b in self.bounds if b[1] is not None)
+        return sum(upper_bounds) if upper_bounds else None
+
     def _solve_x(self, budget: int):
         """Compute the (non-integer) solution to x."""
         # TODO: verify budget is in feasible region
@@ -133,3 +145,8 @@ def _distribute_integers(allocations: tuple[float, ...]) -> tuple[int, ...]:
         int_truncation += 1
 
     return tuple(floored_allocations)
+
+
+def solve(bounds: Bounds, budget: int):
+    """Solve the equitable allocation problem for bounds and budget."""
+    return EquitableBudgetAllocator(bounds).solve(budget)
