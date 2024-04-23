@@ -54,6 +54,59 @@ def plot_h(bounds: Bounds):
     return f
 
 
+def plot_h_inv(bounds: Bounds):
+    """Evaluate the (inverse) mapping from x to budgets."""
+    # get domain of h
+    start, end = get_domain(bounds)
+    padding = 2
+    xs = range(start, end)
+
+    # evaluate on domain
+    solver = EquitableBudgetAllocator(bounds)
+    budgets = [sum(solver.evaluate(x)) for x in xs]
+
+    # infer rate of change
+    def rates_of_change(budgets, xs):
+        rates = []
+        for i in range(1, len(budgets)):
+            d_x = xs[i] - xs[i - 1]
+            d_budget = budgets[i] - budgets[i - 1]
+            rates.append(d_x / d_budget)
+        return rates
+
+    rates = rates_of_change(budgets, xs)
+
+    # plot inverse function evaluation and rate of change
+    f, ax = plt.subplots(2, sharex=True)
+    ax[0].plot(budgets, xs)
+    ax[0].set_title("$h^{-1}(B)$")
+    ax[0].set_xlabel("B")
+    ax[0].set_ylabel("$x^*$")
+    ax[0].xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
+    ax[0].xaxis.set_tick_params(labelbottom=True)
+
+    # plot left / right extrapolation if unbounded
+    if any(b[0] is None for b in bounds):
+        l_xs = [start - padding, start]
+        l_budgets = [sum(solver.evaluate(x)) for x in l_xs]
+        l_rate = rates_of_change(l_budgets, l_xs)
+        ax[0].plot(l_budgets, l_xs, linestyle="--")
+        ax[1].step([*l_budgets, budgets[0]], [l_rate[0], l_rate[0], rates[0]], where="post", linestyle="--")
+    if any(b[1] is None for b in bounds):
+        r_xs = [end - 1, end + padding - 1]
+        r_budgets = [sum(solver.evaluate(x)) for x in r_xs]
+        r_rate = rates_of_change(r_budgets, r_xs)
+        ax[0].plot(r_budgets, r_xs, linestyle="--")
+        ax[1].step([budgets[-1], *r_budgets], [rates[-1], r_rate[0], r_rate[0]], where="post", linestyle="--")
+
+    ax[1].step(budgets, [*rates, rates[-1]], where="post")
+    ax[1].set_title("Rate of change")
+    ax[1].set_xlabel("B")
+    ax[1].set_ylabel("Rate")
+
+    return f
+
+
 @rc_context
 def main():
     bounds = (
@@ -63,7 +116,8 @@ def main():
         (None, 3),
         (5, 7),
     )
-    savefig(plot_h(bounds))
+    savefig(plot_h(bounds), "monotonic")
+    savefig(plot_h_inv(bounds), "inverse")
 
 
 if __name__ == "__main__":
