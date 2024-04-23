@@ -1,7 +1,7 @@
 import itertools
 import math
 import typing
-from bisect import bisect
+from bisect import bisect_right
 from dataclasses import dataclass, field
 from operator import itemgetter
 
@@ -67,7 +67,7 @@ class EquitableBudgetAllocator:
         keys, values = self._table
 
         # find region with binary search
-        budget_key = bisect(keys, budget) - 1
+        budget_key = bisect_right(keys, budget) - 1
 
         # handle exterior of defined solution table
         if budget_key < 0:
