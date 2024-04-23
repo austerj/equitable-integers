@@ -23,13 +23,18 @@ def plot_h(bounds: Bounds):
     # get domain of plot
     start, end = get_domain(bounds)
     padding = 2
-    xs = range(start - padding, end + padding)
+    # add padding if bounded
+    if not any(b[0] is None for b in bounds):
+        start -= padding
+    if not any(b[1] is None for b in bounds):
+        end += padding
+    xs = range(start, end)
 
     # evaluate on domain
     solver = EquitableBudgetAllocator(bounds)
     budgets = [sum(solver.evaluate(x)) for x in xs]
 
-    # plot function evaluation and bounds
+    # plot function evaluation
     f, ax = plt.subplots(2, sharex=True)
     ax[0].plot(xs, budgets)
     ax[0].set_title("$h(x)$")
@@ -38,6 +43,17 @@ def plot_h(bounds: Bounds):
     ax[0].xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
     ax[0].xaxis.set_tick_params(labelbottom=True)
 
+    # plot left / right extrapolation if unbounded
+    if any(b[0] is None for b in bounds):
+        l_xs = [start - padding, start]
+        l_budgets = [sum(solver.evaluate(x)) for x in l_xs]
+        ax[0].plot(l_xs, l_budgets, linestyle="--")
+    if any(b[1] is None for b in bounds):
+        r_xs = [end - 1, end + padding - 1]
+        r_budgets = [sum(solver.evaluate(x)) for x in r_xs]
+        ax[0].plot(r_xs, r_budgets, linestyle="--")
+
+    # plot bounds
     for i, b in enumerate(reversed(bounds)):
         lower = b[0] if b[0] is not None else start - padding
         upper = b[1] if b[1] is not None else end + padding
