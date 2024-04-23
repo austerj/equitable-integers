@@ -1,3 +1,6 @@
+import itertools
+import typing
+
 import matplotlib.pyplot as plt
 from matplotlib import ticker
 
@@ -5,11 +8,20 @@ from eqint.solver import Bounds, EquitableBudgetAllocator
 from plots import rc_context, savefig
 
 
+def get_domain(bounds: Bounds) -> tuple[int, int]:
+    """Get base domain of evaluation (smallest and largest explicit bound values)."""
+    start, end = None, None
+    for b in itertools.chain.from_iterable(bounds):
+        if b is not None:
+            start = b if start is None else min(start, b)
+            end = b if end is None else max(end, b)
+    return typing.cast(int, start), typing.cast(int, end)
+
+
 def plot_h(bounds: Bounds):
     """Evaluate the mapping from x to budgets."""
     # get domain of plot
-    start = min(b[0] for b in bounds if b[0] is not None)
-    end = max(b[1] for b in bounds if b[1] is not None)
+    start, end = get_domain(bounds)
     padding = 2
     xs = range(start - padding, end + padding)
 
