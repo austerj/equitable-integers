@@ -110,8 +110,8 @@ def plot_h_inv(bounds: Bounds):
 
     # plot inverse function evaluation
     ax.plot(budgets, xs)
-    ax.set_title("$h^{-1}(B)$")
-    ax.set_xlabel("B")
+    ax.set_title("$h^{-1}(B^*)$")
+    ax.set_xlabel("$B^*$")
     ax.set_ylabel("$x^*$")
 
     # plot left / right extrapolation if unbounded
