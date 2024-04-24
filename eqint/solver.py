@@ -127,7 +127,7 @@ def _solve_table(bounds: Bounds) -> SolutionTable:
     flat_bounds = _flatten_bounds(bounds)
 
     # initialize vars
-    min_region = 0  # constraints are accumulated in loop
+    budget_start = 0  # constraints are accumulated in loop
     n_lower_unbounded = sum(b[0] is None for b in bounds)
     rate = n_lower_unbounded  # initial rate is 1 per non-lower-bounded element
 
@@ -138,23 +138,22 @@ def _solve_table(bounds: Bounds) -> SolutionTable:
             # if upper bound: rate decreases
             rate -= 1
         else:
-            # if lower bound: rate and total min increases
+            # if lower bound: rate and start of initial budget region increases
             rate += 1
-            min_region += b
+            budget_start += b
         x_table[b] = rate
 
     # construct final table mapping budget to x-value and rates on linear sections
     # NOTE: since bounds are pre-sorted, insertion order guarantees that keys are sorted
     keys: list[int] = []
     values: list[tuple[int, int]] = []
-    region_start = min_region
     # rate accounts for the contribution from unbounded allocations before the first x
     prev_x, prev_rate = 0, n_lower_unbounded
 
     for x, rate in x_table.items():
         # accumulate the mapping from regions of budgets to values of x
-        region_start += (x - prev_x) * prev_rate
-        keys.append(region_start)
+        budget_start += (x - prev_x) * prev_rate
+        keys.append(budget_start)
         values.append((x, rate))
         prev_x, prev_rate = x, rate
 
