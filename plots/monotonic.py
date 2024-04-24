@@ -99,7 +99,7 @@ def plot_h_inv(bounds: Bounds):
     # get domain of h
     start, end = get_domain(bounds)
     padding = 2
-    xs = range(start, end)
+    xs = range(start, end + 1)
 
     # evaluate on domain
     solver = EquitableBudgetAllocator(bounds)
