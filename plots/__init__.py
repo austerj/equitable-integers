@@ -9,7 +9,7 @@ from matplotlib.figure import Figure
 rc_context = mpl.rc_context(
     {
         # figure
-        "figure.figsize": [7, 4.5],
+        "figure.figsize": [7, 3],
         "figure.constrained_layout.use": True,
         "figure.constrained_layout.h_pad": 0.08334,
         "figure.constrained_layout.w_pad": 0.08334,

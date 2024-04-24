@@ -22,50 +22,74 @@ def plot_h(bounds: Bounds):
     """Evaluate the mapping from x to budgets."""
     # get domain of plot
     start, end = get_domain(bounds)
-    padding = 2
-    # add padding if bounded
-    if not any(b[0] is None for b in bounds):
-        start -= padding
-    if not any(b[1] is None for b in bounds):
-        end += padding
-    xs = range(start, end)
+    padding = 1.5
+    xs = range(start, end + 1)
 
     # evaluate on domain
     solver = EquitableBudgetAllocator(bounds)
     budgets = [sum(solver.evaluate(x)) for x in xs]
 
-    # plot function evaluation
-    f, ax = plt.subplots(2, sharex=True)
-    ax[0].plot(xs, budgets)
-    ax[0].set_title("$h(x)$")
-    ax[0].set_xlabel("$x$")
-    ax[0].set_ylabel("Budget")
-    ax[0].xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
-    ax[0].xaxis.set_tick_params(labelbottom=True)
+    # infer rate of change
+    def rates_of_change(xs, budgets):
+        rates = []
+        for i in range(1, len(budgets)):
+            d_budget = budgets[i] - budgets[i - 1]
+            d_x = xs[i] - xs[i - 1]
+            rates.append(d_budget / d_x)
+        return rates
 
-    # plot left / right extrapolation if unbounded
-    if any(b[0] is None for b in bounds):
-        l_xs = [start - padding, start]
-        l_budgets = [sum(solver.evaluate(x)) for x in l_xs]
-        ax[0].plot(l_xs, l_budgets, linestyle="--")
-    if any(b[1] is None for b in bounds):
-        r_xs = [end - 1, end + padding - 1]
-        r_budgets = [sum(solver.evaluate(x)) for x in r_xs]
-        ax[0].plot(r_xs, r_budgets, linestyle="--")
+    rates = rates_of_change(xs, budgets)
+
+    # show x ticks on all subplots
+    f, axs = plt.subplots(3, sharex=True, figsize=[7, 7])
+    axs[0].xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
+    for ax in axs:
+        ax.xaxis.set_tick_params(labelbottom=True)
+
+    # plot function evaluation
+    axs[0].plot(xs, budgets)
+    axs[0].set_title("$h(x)$")
+    axs[0].set_xlabel("$x$")
+    axs[0].set_ylabel("Budget")
+
+    # plot left extrapolation
+    l_xs = [start - padding, start]
+    l_budgets = [sum(solver.evaluate(x)) for x in l_xs]
+    axs[0].plot(l_xs, l_budgets, linestyle="--")
+    # plot right extrapolation
+    r_xs = [end, end + padding]
+    r_budgets = [sum(solver.evaluate(x)) for x in r_xs]
+    axs[0].plot(r_xs, r_budgets, linestyle="--")
 
     # plot bounds
     for i, b in enumerate(reversed(bounds)):
         lower = b[0] if b[0] is not None else start - padding
         upper = b[1] if b[1] is not None else end + padding
-        ax[1].plot([lower, upper], [i, i], linestyle="--" if b[0] is None or b[1] is None else "-")
+        axs[1].plot([lower, upper], [i, i], linestyle="--" if b[0] is None or b[1] is None else "-")
         if b[0] is not None:
-            ax[1].plot(lower, i, marker="<")
+            axs[1].plot(lower, i, marker="<")
         if b[1] is not None:
-            ax[1].plot(upper, i, marker=">")
-    ax[1].set_yticks(range(len(bounds)), [f"$x_{i+1}$" for i in reversed(range(len(bounds)))])
-    ax[1].set_title("Bounds")
-    ax[1].set_xlabel("$x$")
-    ax[1].set_ylabel("Allocation")
+            axs[1].plot(upper, i, marker=">")
+    axs[1].set_yticks(range(len(bounds)), [f"$x_{i+1}$" for i in reversed(range(len(bounds)))])
+    axs[1].set_title("Bounds")
+    axs[1].set_xlabel("$x$")
+    axs[1].set_ylabel("Allocation")
+
+    # plot left extrapolated rate
+    l_xs = [start - padding, start]
+    l_budgets = [sum(solver.evaluate(x)) for x in l_xs]
+    l_rate = rates_of_change(l_xs, l_budgets)
+    axs[2].step([*l_xs, xs[0]], [l_rate[0], l_rate[0], rates[0]], where="post", linestyle="--")
+    # plot right extrapolated rate
+    r_xs = [end, end + padding]
+    r_budgets = [sum(solver.evaluate(x)) for x in r_xs]
+    r_rate = rates_of_change(r_xs, r_budgets)
+    axs[2].step([xs[-1], *r_xs], [rates[-1], r_rate[0], r_rate[0]], where="post", linestyle="--")
+    # plot interior rates
+    axs[2].step(xs, [*rates, rates[-1]], where="post")
+    axs[2].set_title("Rate of change")
+    axs[2].set_xlabel("$x$")
+    axs[2].set_ylabel("Rate")
 
     return f
 
@@ -81,44 +105,24 @@ def plot_h_inv(bounds: Bounds):
     solver = EquitableBudgetAllocator(bounds)
     budgets = [sum(solver.evaluate(x)) for x in xs]
 
-    # infer rate of change
-    def rates_of_change(budgets, xs):
-        rates = []
-        for i in range(1, len(budgets)):
-            d_x = xs[i] - xs[i - 1]
-            d_budget = budgets[i] - budgets[i - 1]
-            rates.append(d_x / d_budget)
-        return rates
+    f, ax = plt.subplots(1)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
 
-    rates = rates_of_change(budgets, xs)
-
-    # plot inverse function evaluation and rate of change
-    f, ax = plt.subplots(2, sharex=True)
-    ax[0].plot(budgets, xs)
-    ax[0].set_title("$h^{-1}(B)$")
-    ax[0].set_xlabel("B")
-    ax[0].set_ylabel("$x^*$")
-    ax[0].xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
-    ax[0].xaxis.set_tick_params(labelbottom=True)
+    # plot inverse function evaluation
+    ax.plot(budgets, xs)
+    ax.set_title("$h^{-1}(B)$")
+    ax.set_xlabel("B")
+    ax.set_ylabel("$x^*$")
 
     # plot left / right extrapolation if unbounded
     if any(b[0] is None for b in bounds):
         l_xs = [start - padding, start]
         l_budgets = [sum(solver.evaluate(x)) for x in l_xs]
-        l_rate = rates_of_change(l_budgets, l_xs)
-        ax[0].plot(l_budgets, l_xs, linestyle="--")
-        ax[1].step([*l_budgets, budgets[0]], [l_rate[0], l_rate[0], rates[0]], where="post", linestyle="--")
+        ax.plot(l_budgets, l_xs, linestyle="--")
     if any(b[1] is None for b in bounds):
         r_xs = [end - 1, end + padding - 1]
         r_budgets = [sum(solver.evaluate(x)) for x in r_xs]
-        r_rate = rates_of_change(r_budgets, r_xs)
-        ax[0].plot(r_budgets, r_xs, linestyle="--")
-        ax[1].step([budgets[-1], *r_budgets], [rates[-1], r_rate[0], r_rate[0]], where="post", linestyle="--")
-
-    ax[1].step(budgets, [*rates, rates[-1]], where="post")
-    ax[1].set_title("Rate of change")
-    ax[1].set_xlabel("B")
-    ax[1].set_ylabel("Rate")
+        ax.plot(r_budgets, r_xs, linestyle="--")
 
     return f
 
