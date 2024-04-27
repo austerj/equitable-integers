@@ -86,7 +86,7 @@ class EquitableBudgetAllocator:
             budget_start = keys[budget_key]
 
         # budget_start + dx * rate = budget <=> dx = (budget - budget_start) / rate
-        # NOTE: min_budget == budget <=> exactly at right boundary of region, so dx is 0
+        # NOTE: budget_start == budget <=> exactly at bound value, so dx is 0
         dx = 0 if budget == budget_start else (budget - budget_start) / rate
 
         return x + dx
