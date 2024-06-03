@@ -284,7 +284,7 @@ def test_solution_bounds():
     assert allocator.upper_bound == None
 
 
-def test_hash():
+def test_equality():
     # solvers with the same parameters evaluate to be equal
     assert EquitableBudgetAllocator(bounds[0]) == EquitableBudgetAllocator(bounds[0])
     # solvers with different parameters evaluate to not be equal

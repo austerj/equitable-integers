@@ -2,7 +2,6 @@ import itertools
 import math
 import typing
 from bisect import bisect_right
-from dataclasses import dataclass, field
 from operator import itemgetter
 
 from eqint import errors
@@ -17,42 +16,38 @@ SolutionValues = tuple[tuple[int, int], ...]
 SolutionTable = tuple[SolutionKeys, SolutionValues]
 
 
-@dataclass(frozen=True, slots=True)
 class EquitableBudgetAllocator:
     """Solver for the most-equitable allocation of a budget of integers under constraints."""
 
-    # problem parameters
-    bounds: Bounds
-    # constants inferred from bounds
-    n_lower_unbounded: int = field(init=False, repr=False, compare=False)
-    n_upper_unbounded: int = field(init=False, repr=False, compare=False)
-    lower_bound: int | None = field(init=False, repr=False, compare=False)
-    upper_bound: int | None = field(init=False, repr=False, compare=False)
-    # solution table
-    _table: SolutionTable = field(init=False, repr=False, compare=False)
+    __slots__ = ("bounds", "n_lower_unbounded", "n_upper_unbounded", "lower_bound", "upper_bound", "_table")
 
-    def __post_init__(self):
+    def __init__(self, bounds: Bounds):
         # validate constraints
-        if any(b[0] is not None and b[1] is not None and b[0] > b[1] for b in self.bounds):
+        if any(b[0] is not None and b[1] is not None and b[0] > b[1] for b in bounds):
             raise errors.ConstraintError("Invalid constraint")
 
-        # solution table
-        object.__setattr__(self, "_table", _solve_table(self.bounds))
+        # construct solution table
+        self.bounds = bounds
+        self._table = _solve_table(self.bounds)
 
         # number of allocations without lower / upper bounds
-        n_lower_unbounded = sum(b[0] is None for b in self.bounds)
-        n_upper_unbounded = sum(b[1] is None for b in self.bounds)
-        object.__setattr__(self, "n_lower_unbounded", n_lower_unbounded)
-        object.__setattr__(self, "n_upper_unbounded", n_upper_unbounded)
+        self.n_lower_unbounded = sum(b[0] is None for b in self.bounds)
+        self.n_upper_unbounded = sum(b[1] is None for b in self.bounds)
 
         # lower / upper bounds for the budget solution space
-        lower_bound = None if n_lower_unbounded else sum(b[0] for b in self.bounds)  # type: ignore
-        upper_bound = None if n_upper_unbounded else sum(b[1] for b in self.bounds)  # type: ignore
-        object.__setattr__(self, "lower_bound", lower_bound)
-        object.__setattr__(self, "upper_bound", upper_bound)
+        self.lower_bound = None if self.n_lower_unbounded else sum(b[0] for b in self.bounds)  # type: ignore
+        self.upper_bound = None if self.n_upper_unbounded else sum(b[1] for b in self.bounds)  # type: ignore
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(bounds={self.bounds})"
+
+    def __eq__(self, value: object) -> bool:
+        return isinstance(value, self.__class__) and all(
+            b_self == b_val for b_self, b_val in itertools.zip_longest(self.bounds, value.bounds)
+        )
 
     @property
-    def no_constraints(self):
+    def is_unbounded(self):
         """Flag denoting if the problem has no constraints (i.e. an unbounded linear function)."""
         # the table has no entries iff all bounds are None
         return len(self._table[0]) == 0
@@ -60,7 +55,7 @@ class EquitableBudgetAllocator:
     def _solve_x(self, budget: int):
         """Compute the (non-integer) solution to x."""
         # if there are no constraints on any allocations, the solution is just the average
-        if self.no_constraints:
+        if self.is_unbounded:
             return budget / len(self.bounds)
 
         # get ref to solution table
