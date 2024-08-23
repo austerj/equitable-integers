@@ -21,10 +21,10 @@ class EquitableBudgetAllocator:
 
     __slots__ = ("bounds", "n_lower_unbounded", "n_upper_unbounded", "lower_bound", "upper_bound", "_table")
 
-    def __init__(self, bounds: Bounds):
+    def __init__(self, bounds: Bounds) -> None:
         # validate constraints
         if any(b[0] is not None and b[1] is not None and b[0] > b[1] for b in bounds):
-            raise errors.ConstraintError("Invalid constraint")
+            raise errors.ConstraintError("Invalid constraints")
 
         # construct solution table
         self.bounds = bounds
@@ -38,8 +38,17 @@ class EquitableBudgetAllocator:
         self.lower_bound = None if self.n_lower_unbounded else sum(b[0] for b in self.bounds)  # type: ignore
         self.upper_bound = None if self.n_upper_unbounded else sum(b[1] for b in self.bounds)  # type: ignore
 
-    def __repr__(self):
-        return f"{self.__class__.__name__}(bounds={self.bounds})"
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(bounds=({self._bounds_repr}))"
+
+    @property
+    def _bounds_repr(self) -> str:
+        """String representation of bounds."""
+        bound_strs: list[str] = []
+        for bound in self.bounds:
+            l, r = bound
+            bound_strs.append(f"({'-∞' if l is None else l}, {'∞' if r is None else r})")
+        return f"({', '.join(bound_strs)})"
 
     def __eq__(self, value: object) -> bool:
         return isinstance(value, self.__class__) and all(
@@ -47,14 +56,14 @@ class EquitableBudgetAllocator:
         )
 
     @property
-    def is_unbounded(self):
-        """Flag denoting if the problem has no constraints (i.e. an unbounded linear function)."""
+    def is_unbounded(self) -> bool:
+        """Flag denoting if the problem has no constraints."""
         # the table has no entries iff all bounds are None
         return len(self._table[0]) == 0
 
-    def _solve_x(self, budget: int):
+    def _solve_x(self, budget: int) -> float:
         """Compute the (non-integer) solution to x."""
-        # if there are no constraints on any allocations, the solution is just the average
+        # if there are no constraints on any allocations, the solution is just the mean
         if self.is_unbounded:
             return budget / len(self.bounds)
 
@@ -82,7 +91,7 @@ class EquitableBudgetAllocator:
 
         # budget_start + dx * rate = budget <=> dx = (budget - budget_start) / rate
         # NOTE: budget_start == budget <=> exactly at bound value, so dx is 0
-        dx = 0 if budget == budget_start else (budget - budget_start) / rate
+        dx = 0.0 if budget == budget_start else (budget - budget_start) / rate
 
         return x + dx
 
@@ -156,7 +165,7 @@ def _solve_table(bounds: Bounds) -> SolutionTable:
 
 
 def _distribute_integers(allocations: tuple[float, ...]) -> tuple[int, ...]:
-    """Optimally distribute integers from the continuous solution to the allocation problem."""
+    """Optimally distribute integers from the continuous solution."""
     # since the bounds are integer, the floored value will not break the constraints
     floored_allocations = [math.floor(a) for a in allocations]
 
@@ -180,6 +189,6 @@ def _distribute_integers(allocations: tuple[float, ...]) -> tuple[int, ...]:
     return tuple(floored_allocations)
 
 
-def solve(bounds: Bounds, budget: int):
+def solve(bounds: Bounds, budget: int) -> tuple[int, ...]:
     """Solve the equitable allocation problem for bounds and budget."""
     return EquitableBudgetAllocator(bounds).solve(budget)
