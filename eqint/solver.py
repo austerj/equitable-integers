@@ -96,7 +96,7 @@ class EquitableBudgetAllocator:
         return x + dx
 
     def evaluate(self, x: float) -> tuple[float, ...]:
-        """Evaluate the bounded distribution for the specified value of x."""
+        """Evaluate the constrained allocations for the specified value of x."""
         return tuple(
             itertools.chain(
                 (
@@ -111,10 +111,20 @@ class EquitableBudgetAllocator:
             )
         )
 
-    def solve(self, budget: int):
-        """Solve the integer allocation problem and return the bounded items."""
+    @typing.overload
+    def solve(self, budget: int, integer: typing.Literal[True] = ...) -> tuple[int, ...]:
+        ...
+
+    @typing.overload
+    def solve(self, budget: int, integer: typing.Literal[False] = ...) -> tuple[float, ...]:
+        ...
+
+    def solve(self, budget: int, integer: bool = True) -> tuple[typing.Any, ...]:
+        """Solve the (integer) allocation problem and return the resulting allocations."""
         x = self._solve_x(budget)
         allocations = self.evaluate(x)
+        if not integer:
+            return allocations
         return _distribute_integers(allocations)
 
 
@@ -189,6 +199,16 @@ def _distribute_integers(allocations: tuple[float, ...]) -> tuple[int, ...]:
     return tuple(floored_allocations)
 
 
-def solve(bounds: Bounds, budget: int) -> tuple[int, ...]:
-    """Solve the equitable allocation problem for bounds and budget."""
-    return EquitableBudgetAllocator(bounds).solve(budget)
+@typing.overload
+def solve(bounds: Bounds, budget: int, integer: typing.Literal[True] = ...) -> tuple[int, ...]:
+    ...
+
+
+@typing.overload
+def solve(bounds: Bounds, budget: int, integer: typing.Literal[False] = ...) -> tuple[float, ...]:
+    ...
+
+
+def solve(bounds: Bounds, budget: int, integer: bool = True) -> tuple[typing.Any, ...]:
+    """Solve the (integer) allocation problem and return the resulting allocations."""
+    return EquitableBudgetAllocator(bounds).solve(budget, integer)  # type: ignore
