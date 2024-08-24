@@ -1,9 +1,25 @@
 import typing
 
+import numpy as np
 import pytest
+from scipy.optimize import LinearConstraint, minimize
 
 from eqint import errors
 from eqint.solver import Bounds, EquitableBudgetAllocator, solve
+
+
+def scipy_solve(bounds: Bounds, budget: int) -> list[float]:
+    """Solve using trust-region constrained method."""
+    # define linear constraints
+    lb = [b[0] if b[0] is not None else -np.inf for b in bounds] + [budget]
+    ub = [b[1] if b[1] is not None else np.inf for b in bounds] + [budget]
+    A = np.concatenate([np.eye(len(bounds)), np.ones((1, len(bounds)))])
+    constraints = LinearConstraint(A, lb, ub)  # type: ignore
+    # define optimization problem
+    mean = budget / len(bounds)
+    x0 = [mean for _ in range(len(bounds))]  # initial guess of mean
+    fun = lambda x: sum([(x_n - mean) ** 2 for x_n in x])  # minimize squared residuals from mean
+    return minimize(fun, x0=x0, constraints=constraints, method="trust-constr").x.tolist()
 
 
 def solution_correct(bounds: Bounds, budget: int) -> bool:
@@ -195,3 +211,16 @@ def test_solutions(cases: typing.Sequence[Bounds]):
                     solver.solve(budget)
             else:
                 assert solution_correct(bounds, budget)
+
+
+def test_scipy(cases: typing.Sequence[Bounds]):
+    # test that real-valued solutions align with trust-region constrained methods
+    for bounds in cases:
+        solver = EquitableBudgetAllocator(bounds)
+        # NOTE: scipy optimizer for large cases is SLOW - only checking one budget per test case
+        low = sum([b[0] for b in solver.bounds if b[0] is not None] or [-400])
+        high = sum([b[1] for b in solver.bounds if b[1] is not None] or [600])
+        budget = (low + high) // 2
+        solver_allocations = solver.solve(budget, integer=False)
+        scipy_allocations = scipy_solve(bounds, budget)
+        assert solver_allocations == pytest.approx(scipy_allocations, abs=1e-2)
