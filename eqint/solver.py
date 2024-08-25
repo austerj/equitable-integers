@@ -17,7 +17,7 @@ SolutionTable = tuple[SolutionKeys, SolutionValues]
 
 
 class EquitableBudgetAllocator:
-    """Solver for the most-equitable allocation of a budget of integers under constraints."""
+    """Solver for equitable allocations of a budget of integers under constraints."""
 
     __slots__ = ("bounds", "n_lower_unbounded", "n_upper_unbounded", "lower_bound", "upper_bound", "_table")
 
@@ -26,17 +26,17 @@ class EquitableBudgetAllocator:
         if any(b[0] is not None and b[1] is not None and b[0] > b[1] for b in bounds):
             raise errors.ConstraintError("Invalid constraints")
 
-        # construct solution table
-        self.bounds = bounds
-        self._table = _solve_table(self.bounds)
-
         # number of allocations without lower / upper bounds
+        self.bounds = bounds
         self.n_lower_unbounded = sum(b[0] is None for b in self.bounds)
         self.n_upper_unbounded = sum(b[1] is None for b in self.bounds)
 
         # lower / upper bounds for the budget solution space
         self.lower_bound = None if self.n_lower_unbounded else sum(b[0] for b in self.bounds)  # type: ignore
         self.upper_bound = None if self.n_upper_unbounded else sum(b[1] for b in self.bounds)  # type: ignore
+
+        # construct solution table
+        self._table = self._solve_table()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(bounds=({self._bounds_repr}))"
@@ -92,7 +92,7 @@ class EquitableBudgetAllocator:
         # budget_start + dx * rate = budget <=> dx = (budget - budget_start) / rate
         return x if not rate else x + (budget - budget_start) / rate
 
-    def evaluate(self, x: float) -> tuple[float, ...]:
+    def clamp(self, x: float) -> tuple[float, ...]:
         """Evaluate the constrained allocations for the specified value of x."""
         return tuple(
             itertools.chain(
@@ -119,81 +119,78 @@ class EquitableBudgetAllocator:
     def solve(self, budget: int, integer: bool = True) -> tuple[typing.Any, ...]:
         """Solve the (integer) allocation problem and return the resulting allocations."""
         x = self._solve_x(budget)
-        allocations = self.evaluate(x)
+        allocations = self.clamp(x)
         if not integer:
             return allocations
-        return _distribute_integers(allocations)
+        return self._distribute_integers(allocations)
 
+    @property
+    def flat_bounds(self) -> list[tuple[int, bool]]:
+        """Lower- and upper bounds flattened into sorted tuples of (value, is_upper_bound flag)."""
+        lower_bounds = ((b[0], False) for b in self.bounds if b[0] is not None)
+        upper_bounds = ((b[1], True) for b in self.bounds if b[1] is not None)
+        return sorted(itertools.chain(lower_bounds, upper_bounds), key=itemgetter(0))
 
-def _flatten_bounds(bounds: Bounds) -> list[tuple[int, bool]]:
-    """Return (lower, upper) bounds flattened into sorted tuples of (value, is-upper-bound)."""
-    lower_bounds = ((b[0], False) for b in bounds if b[0] is not None)
-    upper_bounds = ((b[1], True) for b in bounds if b[1] is not None)
-    return sorted(itertools.chain(lower_bounds, upper_bounds), key=itemgetter(0))
+    def _solve_table(self) -> SolutionTable:
+        """Compute budget |-> (x, rate) solution table of linear regions for bounds."""
+        # flatten bounds
+        flat_bounds = self.flat_bounds
 
+        # initialize variables
+        budget = 0  # lower bounds are accumulated in loop
+        rate = self.n_lower_unbounded  # initial rate is 1 per non-lower-bounded element
 
-def _solve_table(bounds: Bounds) -> SolutionTable:
-    """Compute budget |-> (x, rate) solution table of linear regions for bounds."""
-    # construct lookup table
-    flat_bounds = _flatten_bounds(bounds)
+        # construct intermediary table mapping values of x to rates of budget allocation
+        x_table: dict[int, int] = {}
+        for value, is_upper in flat_bounds:
+            if is_upper:
+                # if upper bound: rate decreases
+                rate -= 1
+            else:
+                # if lower bound: rate and budget increases
+                rate += 1
+                budget += value
+            x_table[value] = rate
 
-    # initialize variables
-    budget = 0  # lower bounds are accumulated in loop
-    n_lower_unbounded = sum(b[0] is None for b in bounds)
-    rate = n_lower_unbounded  # initial rate is 1 per non-lower-bounded element
+        # construct final table mapping budget to x-value and rates on linear sections
+        # NOTE: since bounds are pre-sorted, insertion order guarantees that keys are sorted
+        keys: list[int] = []
+        values: list[tuple[int, int]] = []
+        # rate accounts for the contribution from unbounded allocations before the first x
+        prev_x, prev_rate = 0, self.n_lower_unbounded
 
-    # construct intermediary table mapping values of x to rates of budget allocation
-    x_table: dict[int, int] = {}
-    for value, is_upper in flat_bounds:
-        if is_upper:
-            # if upper bound: rate decreases
-            rate -= 1
-        else:
-            # if lower bound: rate and budget increases
-            rate += 1
-            budget += value
-        x_table[value] = rate
+        for x, rate in x_table.items():
+            # accumulate the mapping from regions of budgets to values of x
+            budget += (x - prev_x) * prev_rate
+            keys.append(budget)
+            values.append((x, rate))
+            prev_x, prev_rate = x, rate
 
-    # construct final table mapping budget to x-value and rates on linear sections
-    # NOTE: since bounds are pre-sorted, insertion order guarantees that keys are sorted
-    keys: list[int] = []
-    values: list[tuple[int, int]] = []
-    # rate accounts for the contribution from unbounded allocations before the first x
-    prev_x, prev_rate = 0, n_lower_unbounded
+        return tuple(keys), tuple(values)
 
-    for x, rate in x_table.items():
-        # accumulate the mapping from regions of budgets to values of x
-        budget += (x - prev_x) * prev_rate
-        keys.append(budget)
-        values.append((x, rate))
-        prev_x, prev_rate = x, rate
+    def _distribute_integers(self, allocations: tuple[float, ...]) -> tuple[int, ...]:
+        """Optimally distribute integers from the continuous solution."""
+        # since the bounds are integer, the floored value will not break the constraints
+        floored_allocations = [math.floor(a) for a in allocations]
 
-    return tuple(keys), tuple(values)
+        # NOTE: any binding upper bounds in the original problem will have a difference of 0 to the
+        # floored version; since we sort by the difference, these values will not appear before all
+        # missing integers have been added
+        diff_sorted = sorted(enumerate(f_a - a for f_a, a in zip(floored_allocations, allocations)), key=itemgetter(1))
 
+        # rounding is fine here; allocation sum is (negative) float, but value itself represents an
+        # integer (since it solves for integer total budget)
+        int_truncation = round(sum(map(itemgetter(1), diff_sorted)))
 
-def _distribute_integers(allocations: tuple[float, ...]) -> tuple[int, ...]:
-    """Optimally distribute integers from the continuous solution."""
-    # since the bounds are integer, the floored value will not break the constraints
-    floored_allocations = [math.floor(a) for a in allocations]
+        # add integers in order of largest deviation to continuous solution
+        for i, _ in diff_sorted:
+            # >= 0 means all required ints have been added back
+            if int_truncation >= 0:
+                break
+            floored_allocations[i] += 1
+            int_truncation += 1
 
-    # NOTE: any binding upper bounds in the original problem will have a difference of 0 to the
-    # floored version; since we sort by the difference, these values will not appear before all
-    # missing integers have been added
-    diff_sorted = sorted(enumerate(f_a - a for f_a, a in zip(floored_allocations, allocations)), key=itemgetter(1))
-
-    # rounding is fine here; allocation sum is (negative) float, but value itself represents an
-    # integer (since it solves for integer total budget)
-    int_truncation = round(sum(map(itemgetter(1), diff_sorted)))
-
-    # add integers in order of largest deviation to continuous solution
-    for i, _ in diff_sorted:
-        # >= 0 means all required ints have been added back
-        if int_truncation >= 0:
-            break
-        floored_allocations[i] += 1
-        int_truncation += 1
-
-    return tuple(floored_allocations)
+        return tuple(floored_allocations)
 
 
 @typing.overload

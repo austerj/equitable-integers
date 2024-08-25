@@ -27,7 +27,7 @@ def plot_h(bounds: Bounds):
 
     # evaluate on domain
     solver = EquitableBudgetAllocator(bounds)
-    budgets = [sum(solver.evaluate(x)) for x in xs]
+    budgets = [sum(solver.clamp(x)) for x in xs]
 
     # infer rate of change
     def rates_of_change(xs, budgets):
@@ -54,11 +54,11 @@ def plot_h(bounds: Bounds):
 
     # plot left extrapolation
     l_xs = [start - padding, start]
-    l_budgets = [sum(solver.evaluate(x)) for x in l_xs]
+    l_budgets = [sum(solver.clamp(x)) for x in l_xs]
     axs[0].plot(l_xs, l_budgets, linestyle="--")
     # plot right extrapolation
     r_xs = [end, end + padding]
-    r_budgets = [sum(solver.evaluate(x)) for x in r_xs]
+    r_budgets = [sum(solver.clamp(x)) for x in r_xs]
     axs[0].plot(r_xs, r_budgets, linestyle="--")
 
     # plot bounds
@@ -77,12 +77,12 @@ def plot_h(bounds: Bounds):
 
     # plot left extrapolated rate
     l_xs = [start - padding, start]
-    l_budgets = [sum(solver.evaluate(x)) for x in l_xs]
+    l_budgets = [sum(solver.clamp(x)) for x in l_xs]
     l_rate = rates_of_change(l_xs, l_budgets)
     axs[2].step([*l_xs, xs[0]], [l_rate[0], l_rate[0], rates[0]], where="post", linestyle="--")
     # plot right extrapolated rate
     r_xs = [end, end + padding]
-    r_budgets = [sum(solver.evaluate(x)) for x in r_xs]
+    r_budgets = [sum(solver.clamp(x)) for x in r_xs]
     r_rate = rates_of_change(r_xs, r_budgets)
     axs[2].step([xs[-1], *r_xs], [rates[-1], r_rate[0], r_rate[0]], where="post", linestyle="--")
     # plot interior rates
@@ -103,7 +103,7 @@ def plot_h_inv(bounds: Bounds):
 
     # evaluate on domain
     solver = EquitableBudgetAllocator(bounds)
-    budgets = [sum(solver.evaluate(x)) for x in xs]
+    budgets = [sum(solver.clamp(x)) for x in xs]
 
     f, ax = plt.subplots(1)
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
@@ -117,11 +117,11 @@ def plot_h_inv(bounds: Bounds):
     # plot left / right extrapolation if unbounded
     if any(b[0] is None for b in bounds):
         l_xs = [start - padding, start]
-        l_budgets = [sum(solver.evaluate(x)) for x in l_xs]
+        l_budgets = [sum(solver.clamp(x)) for x in l_xs]
         ax.plot(l_budgets, l_xs, linestyle="--")
     if any(b[1] is None for b in bounds):
         r_xs = [end - 1, end + padding - 1]
-        r_budgets = [sum(solver.evaluate(x)) for x in r_xs]
+        r_budgets = [sum(solver.clamp(x)) for x in r_xs]
         ax.plot(r_budgets, r_xs, linestyle="--")
 
     return f
