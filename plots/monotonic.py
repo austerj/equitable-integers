@@ -19,7 +19,7 @@ def get_domain(bounds: Bounds) -> tuple[int, int]:
 
 
 def plot_h(bounds: Bounds):
-    """Evaluate the mapping from x to budgets."""
+    """Plot the mapping from x to budgets."""
     # get domain of plot
     start, end = get_domain(bounds)
     padding = 1.5
@@ -70,7 +70,7 @@ def plot_h(bounds: Bounds):
             axs[1].plot(lower, i, marker="<")
         if b[1] is not None:
             axs[1].plot(upper, i, marker=">")
-    axs[1].set_yticks(range(len(bounds)), [f"$x_{i+1}$" for i in reversed(range(len(bounds)))])
+    axs[1].set_yticks(range(len(bounds)), [f"$x_{{{i+1}}}$" for i in reversed(range(len(bounds)))])
     axs[1].set_title("Bounds")
     axs[1].set_xlabel("$x$")
     axs[1].set_ylabel("Allocation")
@@ -95,7 +95,7 @@ def plot_h(bounds: Bounds):
 
 
 def plot_h_inv(bounds: Bounds):
-    """Evaluate the (inverse) mapping from x to budgets."""
+    """Plot the (right inverse of h) mapping from budgets to x."""
     # get domain of h
     start, end = get_domain(bounds)
     padding = 2
@@ -108,10 +108,10 @@ def plot_h_inv(bounds: Bounds):
     f, ax = plt.subplots(1)
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
 
-    # plot inverse function evaluation
+    # plot right inverse function evaluation
     ax.plot(budgets, xs)
-    ax.set_title("$h^{-1}(B^*)$")
-    ax.set_xlabel("$B^*$")
+    ax.set_title("$g(B)$")
+    ax.set_xlabel("$B$")
     ax.set_ylabel("$x^*$")
 
     # plot left / right extrapolation if unbounded
