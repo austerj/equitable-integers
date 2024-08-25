@@ -75,7 +75,7 @@ class EquitableBudgetAllocator:
 
         # handle exterior of defined solution table
         if budget_key < 0:
-            if self.lower_bound:
+            if self.lower_bound is not None:
                 raise errors.InsufficientBudgetError("Budget outside solution space: cannot satisfy lower bounds.")
             # if no lower bound, we can extrapolate "backwards" from x at the rate of the number of
             # lower-unbounded allocations
@@ -90,10 +90,7 @@ class EquitableBudgetAllocator:
             budget_start = keys[budget_key]
 
         # budget_start + dx * rate = budget <=> dx = (budget - budget_start) / rate
-        # NOTE: budget_start == budget <=> exactly at bound value, so dx is 0
-        dx = 0.0 if budget == budget_start else (budget - budget_start) / rate
-
-        return x + dx
+        return x if not rate else x + (budget - budget_start) / rate
 
     def evaluate(self, x: float) -> tuple[float, ...]:
         """Evaluate the constrained allocations for the specified value of x."""
@@ -140,22 +137,22 @@ def _solve_table(bounds: Bounds) -> SolutionTable:
     # construct lookup table
     flat_bounds = _flatten_bounds(bounds)
 
-    # initialize vars
-    budget_start = 0  # constraints are accumulated in loop
+    # initialize variables
+    budget = 0  # lower bounds are accumulated in loop
     n_lower_unbounded = sum(b[0] is None for b in bounds)
     rate = n_lower_unbounded  # initial rate is 1 per non-lower-bounded element
 
     # construct intermediary table mapping values of x to rates of budget allocation
     x_table: dict[int, int] = {}
-    for b, is_upper in flat_bounds:
+    for value, is_upper in flat_bounds:
         if is_upper:
             # if upper bound: rate decreases
             rate -= 1
         else:
-            # if lower bound: rate and start of initial budget region increases
+            # if lower bound: rate and budget increases
             rate += 1
-            budget_start += b
-        x_table[b] = rate
+            budget += value
+        x_table[value] = rate
 
     # construct final table mapping budget to x-value and rates on linear sections
     # NOTE: since bounds are pre-sorted, insertion order guarantees that keys are sorted
@@ -166,8 +163,8 @@ def _solve_table(bounds: Bounds) -> SolutionTable:
 
     for x, rate in x_table.items():
         # accumulate the mapping from regions of budgets to values of x
-        budget_start += (x - prev_x) * prev_rate
-        keys.append(budget_start)
+        budget += (x - prev_x) * prev_rate
+        keys.append(budget)
         values.append((x, rate))
         prev_x, prev_rate = x, rate
 
