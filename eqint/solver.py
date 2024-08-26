@@ -6,9 +6,6 @@ from operator import itemgetter
 
 from eqint import errors
 
-K = typing.TypeVar("K")
-V = typing.TypeVar("V")
-
 # tuples of bounds provided as problem parameters
 Bound = tuple[int | None, int | None]
 Bounds = typing.Sequence[Bound]
