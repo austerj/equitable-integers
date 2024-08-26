@@ -92,7 +92,7 @@ class EquitableBudgetAllocator:
         # budget_start + dx * rate = budget <=> dx = (budget - budget_start) / rate
         return x if not rate else x + (budget - budget_start) / rate
 
-    def clamp(self, x: float) -> tuple[float, ...]:
+    def allocations(self, x: float) -> tuple[float, ...]:
         """Evaluate the constrained allocations for the specified value of x."""
         return tuple(
             itertools.chain(
@@ -119,7 +119,7 @@ class EquitableBudgetAllocator:
     def solve(self, budget: int, integer: bool = True) -> tuple[typing.Any, ...]:
         """Solve the (integer) allocation problem and return the resulting allocations."""
         x = self._solve_x(budget)
-        allocations = self.clamp(x)
+        allocations = self.allocations(x)
         if not integer:
             return allocations
         return self._distribute_integers(allocations)
