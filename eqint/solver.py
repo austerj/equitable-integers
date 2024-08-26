@@ -115,12 +115,20 @@ class EquitableBudgetAllocator:
 
     def _integer_allocations(self, x: float, n_nonbinding: int) -> tuple[int, ...]:
         """Evaluate the constrained integer allocations for the specified value of x."""
-        # get number of allocations to floor
+        # want to apply n floors and m-n ceils such that the budget remains exhausted, i.e.
+        #   n * floor(x) + (m-n) * ceil(x) = m * x
+        # with m being total non-binding constraints
+        #
+        # if ceil(x) > floor(x):
+        #   n = m * (ceil(x) - x) / (ceil(x) - floor(x))
+        #     = m * (ceil(x) - x)
+        # since ceil(x) - floor(x) = 1
+        #
+        # if ceil(x) == floor(x):
+        #   n in [0,m]
+        # hence can reuse above case
         floor_x, ceil_x = math.floor(x), math.ceil(x)
-        if floor_x == ceil_x:
-            n_floored = n_nonbinding
-        else:
-            n_floored = round((n_nonbinding * x - n_nonbinding * ceil_x) / (floor_x - ceil_x))
+        n_floored = round(n_nonbinding * (ceil_x - x))
 
         # track the count of floored values
         counter = itertools.count(0)
