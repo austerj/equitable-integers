@@ -70,7 +70,7 @@ def plot_h(bounds: Bounds):
             axs[1].plot(lower, i, marker="<")
         if b[1] is not None:
             axs[1].plot(upper, i, marker=">")
-    axs[1].set_yticks(range(len(bounds)), [f"$x_{{{i+1}}}$" for i in reversed(range(len(bounds)))])
+    axs[1].set_yticks(range(len(bounds)), [f"$a_{{{i+1}}}$" for i in reversed(range(len(bounds)))])
     axs[1].set_title("Bounds")
     axs[1].set_xlabel("$x$")
     axs[1].set_ylabel("Allocation")
