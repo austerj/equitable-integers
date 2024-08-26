@@ -19,7 +19,15 @@ SolutionTable = tuple[SolutionKeys, SolutionValues]
 class EquitableBudgetAllocator:
     """Solver for equitable allocations of a budget of integers under constraints."""
 
-    __slots__ = ("bounds", "n_lower_unbounded", "n_upper_unbounded", "lower_bound", "upper_bound", "_table")
+    __slots__ = (
+        "bounds",
+        "n_lower_unbounded",
+        "n_upper_unbounded",
+        "lower_bound",
+        "upper_bound",
+        "is_unbounded",
+        "_table",
+    )
 
     def __init__(self, bounds: Bounds) -> None:
         # validate constraints
@@ -30,6 +38,9 @@ class EquitableBudgetAllocator:
         self.bounds = bounds
         self.n_lower_unbounded = sum(b[0] is None for b in self.bounds)
         self.n_upper_unbounded = sum(b[1] is None for b in self.bounds)
+
+        # flag denoting if the problem has no constraints
+        self.is_unbounded = all(b[0] is None and b[1] is None for b in self.bounds)
 
         # lower / upper bounds for the budget solution space
         self.lower_bound = None if self.n_lower_unbounded else sum(b[0] for b in self.bounds)  # type: ignore
@@ -54,12 +65,6 @@ class EquitableBudgetAllocator:
         return isinstance(value, self.__class__) and all(
             b_self == b_val for b_self, b_val in itertools.zip_longest(self.bounds, value.bounds)
         )
-
-    @property
-    def is_unbounded(self) -> bool:
-        """Flag denoting if the problem has no constraints."""
-        # the table has no entries iff all bounds are None
-        return len(self._table[0]) == 0
 
     def _solve_x(self, budget: int) -> float:
         """Compute the (non-integer) solution to x."""
@@ -133,40 +138,34 @@ class EquitableBudgetAllocator:
 
     def _solve_table(self) -> SolutionTable:
         """Compute budget |-> (x, rate) solution table of linear regions for bounds."""
-        # flatten bounds
-        flat_bounds = self.flat_bounds
-
         # initialize variables
         budget = 0  # lower bounds are accumulated in loop
         rate = self.n_lower_unbounded  # initial rate is 1 per non-lower-bounded element
 
         # construct intermediary table mapping values of x to rates of budget allocation
-        x_table: dict[int, int] = {}
-        for value, is_upper in flat_bounds:
+        r_table: dict[int, int] = {}
+        for x, is_upper in self.flat_bounds:
             if is_upper:
                 # if upper bound: rate decreases
                 rate -= 1
             else:
                 # if lower bound: rate and budget increases
                 rate += 1
-                budget += value
-            x_table[value] = rate
+                budget += x
+            r_table[x] = rate
 
         # construct final table mapping budget to x-value and rates on linear sections
-        # NOTE: since bounds are pre-sorted, insertion order guarantees that keys are sorted
-        keys: list[int] = []
-        values: list[tuple[int, int]] = []
-        # rate accounts for the contribution from unbounded allocations before the first x
         prev_x, prev_rate = 0, self.n_lower_unbounded
+        x_table: dict[int, tuple[int, int]] = {}
 
-        for x, rate in x_table.items():
+        # NOTE: since bounds are pre-sorted, insertion order of dicts ensures that keys are sorted
+        for x, rate in r_table.items():
             # accumulate the mapping from regions of budgets to values of x
             budget += (x - prev_x) * prev_rate
-            keys.append(budget)
-            values.append((x, rate))
+            x_table[budget] = (x, rate)
             prev_x, prev_rate = x, rate
 
-        return tuple(keys), tuple(values)
+        return tuple(x_table.keys()), tuple(x_table.values())
 
     def _distribute_integers(self, allocations: tuple[float, ...]) -> tuple[int, ...]:
         """Optimally distribute integers from the continuous solution."""
