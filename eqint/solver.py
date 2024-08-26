@@ -6,6 +6,9 @@ from operator import itemgetter
 
 from eqint import errors
 
+K = typing.TypeVar("K")
+V = typing.TypeVar("V")
+
 # tuples of bounds provided as problem parameters
 Bound = tuple[int | None, int | None]
 Bounds = typing.Sequence[Bound]
@@ -103,11 +106,37 @@ class EquitableBudgetAllocator:
             itertools.chain(
                 (
                     # lower bound if x is above it
+                    float(b[0]) if b[0] is not None and x < b[0]
+                    # upper bound if x is below it
+                    else float(b[1]) if b[1] is not None and x > b[1]
+                    # else value
+                    else x
+                    for b in self.bounds
+                ),
+            )
+        )
+
+    def integer_allocations(self, x: float) -> tuple[int, ...]:
+        """Evaluate the constrained integer allocations for the specified value of x."""
+        floor_x, ceil_x = math.floor(x), math.ceil(x)
+        n_nonbinding = sum((b[0] is None or b[0] < x) and (b[1] is None or x < b[1]) for b in self.bounds)
+
+        # get number of allocations to floor
+        if floor_x == ceil_x:
+            n_floored = n_nonbinding
+        else:
+            n_floored = round((n_nonbinding * x - n_nonbinding * ceil_x) / (floor_x - ceil_x))
+        counter = itertools.count(0)
+
+        return tuple(
+            itertools.chain(
+                (
+                    # lower bound if x is above it
                     b[0] if b[0] is not None and x < b[0]
                     # upper bound if x is below it
                     else b[1] if b[1] is not None and x > b[1]
-                    # else value
-                    else x
+                    # else floor until count has been reached, then ceil
+                    else floor_x if next(counter) < n_floored else ceil_x
                     for b in self.bounds
                 ),
             )
@@ -124,10 +153,9 @@ class EquitableBudgetAllocator:
     def solve(self, budget: int, integer: bool = True) -> tuple[typing.Any, ...]:
         """Solve the (integer) allocation problem and return the resulting allocations."""
         x = self._solve_x(budget)
-        allocations = self.allocations(x)
         if not integer:
-            return allocations
-        return self._distribute_integers(allocations)
+            return self.allocations(x)
+        return self.integer_allocations(x)
 
     @property
     def flat_bounds(self) -> list[tuple[int, bool]]:
@@ -166,30 +194,6 @@ class EquitableBudgetAllocator:
             prev_x, prev_rate = x, rate
 
         return tuple(x_table.keys()), tuple(x_table.values())
-
-    def _distribute_integers(self, allocations: tuple[float, ...]) -> tuple[int, ...]:
-        """Optimally distribute integers from the continuous solution."""
-        # since the bounds are integer, the floored value will not break the constraints
-        floored_allocations = [math.floor(a) for a in allocations]
-
-        # NOTE: any binding upper bounds in the original problem will have a difference of 0 to the
-        # floored version; since we sort by the difference, these values will not appear before all
-        # missing integers have been added
-        diff_sorted = sorted(enumerate(f_a - a for f_a, a in zip(floored_allocations, allocations)), key=itemgetter(1))
-
-        # rounding is fine here; allocation sum is (negative) float, but value itself represents an
-        # integer (since it solves for integer total budget)
-        int_truncation = round(sum(map(itemgetter(1), diff_sorted)))
-
-        # add integers in order of largest deviation to continuous solution
-        for i, _ in diff_sorted:
-            # >= 0 means all required ints have been added back
-            if int_truncation >= 0:
-                break
-            floored_allocations[i] += 1
-            int_truncation += 1
-
-        return tuple(floored_allocations)
 
 
 @typing.overload
