@@ -7,6 +7,9 @@ from matplotlib import ticker
 from eqint.solver import Bounds, EquitableBudgetAllocator
 from plots import rc_context, savefig
 
+T = typing.TypeVar("T")
+S = typing.TypeVar("S")
+
 
 def get_domain(bounds: Bounds) -> tuple[int, int]:
     """Get base domain of evaluation (smallest and largest explicit bound values)."""
@@ -16,6 +19,25 @@ def get_domain(bounds: Bounds) -> tuple[int, int]:
             start = b if start is None else min(start, b)
             end = b if end is None else max(end, b)
     return typing.cast(int, start), typing.cast(int, end)
+
+
+def get_segments(xs: typing.Sequence[T], ys: typing.Sequence[S]) -> list[tuple[list[T], list[S]]]:
+    """Split sequences into continuous segments."""
+    prev_y = None, None
+    segments: list[tuple[list[T], list[S]]] = []
+    segment_x: list[T] = []
+    segment_y: list[S] = []
+    for x, y in zip(xs, ys):
+        if y == prev_y:
+            # skip single-element segments
+            if len(segment_x) > 1:
+                segments.append((segment_x, segment_y))
+            segment_x, segment_y = [], []
+        segment_x.append(x)
+        segment_y.append(y)
+        prev_y = y
+    segments.append((segment_x, segment_y))
+    return segments
 
 
 def plot_h(bounds: Bounds):
@@ -80,11 +102,13 @@ def plot_h(bounds: Bounds):
     l_budgets = [sum(solver.allocations(x)) for x in l_xs]
     l_rate = rates_of_change(l_xs, l_budgets)
     axs[2].step([*l_xs, xs[0]], [l_rate[0], l_rate[0], rates[0]], where="post", linestyle="--")
+
     # plot right extrapolated rate
     r_xs = [end, end + padding]
     r_budgets = [sum(solver.allocations(x)) for x in r_xs]
     r_rate = rates_of_change(r_xs, r_budgets)
     axs[2].step([xs[-1], *r_xs], [rates[-1], r_rate[0], r_rate[0]], where="post", linestyle="--")
+
     # plot interior rates
     axs[2].step(xs, [*rates, rates[-1]], where="post")
     axs[2].set_title("Rate of change")
@@ -109,7 +133,13 @@ def plot_h_inv(bounds: Bounds):
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
 
     # plot right inverse function evaluation
-    ax.plot(budgets, xs)
+    for i, (x_segment, budget_segment) in enumerate(get_segments(xs, budgets)):
+        # plot segment and mark discontinuity
+        ax.plot(budget_segment, x_segment)
+        ax.plot(budget_segment[-1], x_segment[-1], marker="o", markerfacecolor="w")
+        # mark start of new segment
+        if i > 0:
+            ax.plot(budget_segment[0], x_segment[0], marker="o")
     ax.set_title("$g(B)$")
     ax.set_xlabel("$B$")
     ax.set_ylabel("$x^*$")
@@ -134,11 +164,11 @@ def plot_h_inv(bounds: Bounds):
 @rc_context
 def main():
     bounds = (
-        (1, 7),
-        (3, 4),
+        (1, 5),
         (2, 4),
         (None, 3),
-        (5, 7),
+        (7, 10),
+        (9, 12),
     )
     savefig(plot_h(bounds), "monotonic")
     savefig(plot_h_inv(bounds), "inverse")
