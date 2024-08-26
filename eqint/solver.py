@@ -69,11 +69,11 @@ class EquitableBudgetAllocator:
             b_self == b_val for b_self, b_val in itertools.zip_longest(self.bounds, value.bounds)
         )
 
-    def _solve_x(self, budget: int) -> float:
-        """Compute the (non-integer) solution to x."""
+    def _solve_x(self, budget: int) -> tuple[float, int]:
+        """Return the (non-integer) solution to x and the rate (count of non-binding constraints)."""
         # if there are no constraints on any allocations, the solution is just the mean
         if self.is_unbounded:
-            return budget / len(self.bounds)
+            return budget / len(self.bounds), len(self.bounds)
 
         # get ref to solution table
         keys, values = self._table
@@ -98,7 +98,7 @@ class EquitableBudgetAllocator:
             budget_start = keys[budget_key]
 
         # budget_start + dx * rate = budget <=> dx = (budget - budget_start) / rate
-        return x if not rate else x + (budget - budget_start) / rate
+        return x if not rate else x + (budget - budget_start) / rate, rate
 
     def allocations(self, x: float) -> tuple[float, ...]:
         """Evaluate the constrained allocations for the specified value of x."""
@@ -116,16 +116,16 @@ class EquitableBudgetAllocator:
             )
         )
 
-    def integer_allocations(self, x: float) -> tuple[int, ...]:
+    def _integer_allocations(self, x: float, n_nonbinding: int) -> tuple[int, ...]:
         """Evaluate the constrained integer allocations for the specified value of x."""
-        floor_x, ceil_x = math.floor(x), math.ceil(x)
-        n_nonbinding = sum((b[0] is None or b[0] < x) and (b[1] is None or x < b[1]) for b in self.bounds)
-
         # get number of allocations to floor
+        floor_x, ceil_x = math.floor(x), math.ceil(x)
         if floor_x == ceil_x:
             n_floored = n_nonbinding
         else:
             n_floored = round((n_nonbinding * x - n_nonbinding * ceil_x) / (floor_x - ceil_x))
+
+        # track the count of floored values
         counter = itertools.count(0)
 
         return tuple(
@@ -152,10 +152,10 @@ class EquitableBudgetAllocator:
 
     def solve(self, budget: int, integer: bool = True) -> tuple[typing.Any, ...]:
         """Solve the (integer) allocation problem and return the resulting allocations."""
-        x = self._solve_x(budget)
+        x, rate = self._solve_x(budget)
         if not integer:
             return self.allocations(x)
-        return self.integer_allocations(x)
+        return self._integer_allocations(x, rate)
 
     @property
     def flat_bounds(self) -> list[tuple[int, bool]]:
