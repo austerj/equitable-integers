@@ -1,4 +1,5 @@
 import itertools
+import math
 import typing
 
 from matplotlib import ticker
@@ -114,6 +115,10 @@ def plot_h(bounds: Bounds):
     axs[2].set_xlabel("$x$")
     axs[2].set_ylabel("Rate")
 
+    # force ylim
+    ylim = axs[0].get_ylim()
+    axs[0].set_ylim(ylim[0], math.ceil(ylim[1] / 5) * 5 + padding)
+
     return f
 
 
@@ -156,6 +161,10 @@ def plot_h_inv(bounds: Bounds):
         ax.plot(r_budgets, r_xs, linestyle="--")
     else:
         ax.plot(budgets[-1], end, marker="o")
+
+    # force integer ticks
+    ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+    ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
     return f
 
