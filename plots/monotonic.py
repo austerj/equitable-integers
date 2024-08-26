@@ -1,11 +1,10 @@
 import itertools
 import typing
 
-import matplotlib.pyplot as plt
 from matplotlib import ticker
 
 from eqint.solver import Bounds, EquitableBudgetAllocator
-from plots import rc_context, savefig
+from plots import rc_context, savefig, subplots
 
 T = typing.TypeVar("T")
 S = typing.TypeVar("S")
@@ -63,7 +62,7 @@ def plot_h(bounds: Bounds):
     rates = rates_of_change(xs, budgets)
 
     # show x ticks on all subplots
-    f, axs = plt.subplots(3, sharex=True, figsize=[7, 7])
+    f, axs = subplots(3, sharex=True, figsize=(7, 7))
     axs[0].xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
     for ax in axs:
         ax.xaxis.set_tick_params(labelbottom=True)
@@ -129,7 +128,7 @@ def plot_h_inv(bounds: Bounds):
     solver = EquitableBudgetAllocator(bounds)
     budgets = [sum(solver.allocations(x)) for x in xs]
 
-    f, ax = plt.subplots(1)
+    f, ax = subplots()
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
 
     # plot right inverse function evaluation
